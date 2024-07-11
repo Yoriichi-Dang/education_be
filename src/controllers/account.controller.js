@@ -1,67 +1,61 @@
 const authService = require("../services/auth.service");
 const accountService = require("../services/account.service");
 const jwt = require("jsonwebtoken");
-const { generateToken } = require("../utils");
-let refreshTokens = [];
+const { generateAccessToken } = require("../utils");
 module.exports = {
   signIn: async (req, res) => {
-    const user = await authService.loginAccount(req);
-    if (user) {
-      const { accessToken, refreshToken } = generateToken(
-        user["_id"],
-        user.email,
-        user.fullName
-      );
-      refreshTokens.push(refreshToken);
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: false,
-        path: "/",
-        sameSite: "strict",
-      });
-      return res.send({ accessToken });
-    } else {
-      return res.status(404).send({ message: "User not found" });
+    const userProfile = await authService.signInService(req);
+    if (!userProfile) {
+      return res.sendStatus(404);
     }
-  },
-  signUp: async (req, res) => {
-    const user = await authService.signUpAccount(req);
-    if (!user) {
-      return res.status(400).send({ message: "User exists" });
-    }
-    const { accessToken, refreshToken } = generateToken(
-      user.email,
-      user.fullName
+    const accessToken = generateAccessToken(
+      userProfile["_id"],
+      userProfile.email,
+      userProfile.fullName,
+      userProfile.role
     );
-    res.cookie("refreshToken", refreshToken, {
+    res.cookie("refreshToken", userProfile.refreshToken, {
       httpOnly: true,
       secure: false,
       path: "/",
       sameSite: "strict",
+      maxAge: 1000 * 60 * 60 * 24 * process.env.REFRESH_EXPIRES_TIME[0],
     });
-    res.status(201).send({ accessToken });
+    return res.status(201).send({ accessToken });
+  },
+  signUp: async (req, res) => {
+    const id = await authService.signUpService(req);
+    if (!id) return res.status(400).json({ message: "Email already exists" });
+    return res.sendStatus(201);
   },
   signOut: async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
-    res.clearCookie("refreshToken", {
-      httpOnly: true,
-      secure: false, // Set to true if using https
-      path: "/",
-      sameSite: "strict",
-    });
-    refreshTokens = refreshTokens.filter((token) => token !== refreshToken);
-    res.status(204).send({ message: "Logout" });
+    if (refreshToken) {
+      await authService.signOutService(refreshToken);
+      res.clearCookie("refreshToken", {
+        httpOnly: true,
+        secure: false, // Set to true if using https
+        path: "/",
+        sameSite: "strict",
+      });
+      res.status(204).send({ message: "Logout" });
+    } else {
+      res.status(404).json({ message: "Not found refresh token" });
+    }
   },
   refreshToken: async (req, res) => {
     const refreshToken = req.cookies.refreshToken;
     if (!refreshToken) res.sendStatus(401);
-    if (!refreshTokens.includes(refreshToken)) return res.sendStatus(403);
+    const user = await authService.findAccount(refreshToken);
+    if (user.refreshToken !== refreshToken) res.sendStatus(403);
     jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET, (err, user) => {
       if (err) return res.sendStatus(403);
-      const accessToken = jwt.sign(
-        { data: { email: user.data.email, name: user.data.name } },
-        process.env.ACCESS_TOKEN_SECRET,
-        { expiresIn: "30s" }
+      console.log(user);
+      const accessToken = generateAccessToken(
+        user.data.id,
+        user.data.email,
+        user.data.name,
+        user.data.role
       );
       return res.status(200).json({ accessToken });
     });

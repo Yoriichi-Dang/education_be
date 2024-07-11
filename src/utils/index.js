@@ -8,24 +8,27 @@ function getHeaderToken(req) {
   const token = authHeader && authHeader.split(" ")[1];
   return token;
 }
-function generateToken(id, email, fullName) {
+function generateAccessToken(id, email, fullName, role) {
   const accessToken = jwt.sign(
     {
-      data: { id: id, email, name: fullName },
+      data: { id: id, email, name: fullName, role: role },
     },
     process.env.ACCESS_TOKEN_SECRET,
-    { expiresIn: "30s" }
+    { expiresIn: process.env.ACCESS_EXPIRES_TIME }
   );
+  return accessToken;
+}
+function generateRefreshToken(id, email, fullName, role) {
   const refreshToken = jwt.sign(
     {
-      data: { id: id, email: email, name: fullName },
+      data: { id: id, email: email, name: fullName, role: role },
     },
     process.env.REFRESH_TOKEN_SECRET,
     {
-      expiresIn: "2d",
+      expiresIn: process.env.REFRESH_EXPIRES_TIME,
     }
   );
-  return { accessToken, refreshToken };
+  return refreshToken;
 }
 
 function getNewRefreshToken(oldRefreshToken) {
@@ -45,7 +48,8 @@ function getNewRefreshToken(oldRefreshToken) {
   return newRefreshToken;
 }
 module.exports = {
-  generateToken,
+  generateAccessToken,
+  generateRefreshToken,
   decodeToken,
   getNewRefreshToken,
   getHeaderToken,

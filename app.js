@@ -15,7 +15,10 @@ app.use("/swagger", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 const authRoute = require("./src/routes/auth.route.js");
 const accountRoute = require("./src/routes/account.route.js");
-const { authenticateToken } = require("./src/middleware/authenticated.js");
+const {
+  authenticateToken,
+  protectRoutes,
+} = require("./src/middleware/authenticated.js");
 app.use("/", authRoute);
 app.use("/", authenticateToken, accountRoute);
 const start = async () => {
